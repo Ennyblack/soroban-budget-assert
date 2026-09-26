@@ -1,7 +1,7 @@
-#![allow(dead_code)]
+#[allow(dead_code)]
 
-pub mod bounds;
-pub mod metrics;
+mod bounds;
+mod metrics;
 
 pub fn check_cpu_instructions(instructions: u32, limit: u64) -> Result<(), String> {
     metrics::check_cpu_instructions(instructions, limit)
