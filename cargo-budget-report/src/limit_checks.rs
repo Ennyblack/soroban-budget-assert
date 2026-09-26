@@ -1,27 +1,18 @@
 #![allow(dead_code)]
 
-fn check_bounds<T: PartialOrd + std::fmt::Display>(
-    value: T,
-    max: T,
-    name: &str,
-) -> Result<(), String> {
-    if value > max {
-        Err(format!("{} {} exceeds limit {}", name, value, max))
-    } else {
-        Ok(())
-    }
-}
+mod bounds;
+mod metrics;
 
 pub fn check_cpu_instructions(instructions: u32, limit: u64) -> Result<(), String> {
-    check_bounds(u64::from(instructions), limit, "CPU Instructions")
+    metrics::check_cpu_instructions(instructions, limit)
 }
 
 pub fn check_read_bytes(bytes: u32, limit: u64) -> Result<(), String> {
-    check_bounds(u64::from(bytes), limit, "Read Bytes")
+    metrics::check_read_bytes(bytes, limit)
 }
 
 pub fn check_write_bytes(bytes: u32, limit: u64) -> Result<(), String> {
-    check_bounds(u64::from(bytes), limit, "Write Bytes")
+    metrics::check_write_bytes(bytes, limit)
 }
 
 #[cfg(test)]
