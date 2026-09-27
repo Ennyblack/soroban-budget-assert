@@ -111,7 +111,8 @@ impl ConstantProductPool {
         // `isqrt()` computes the integer (floor) square root — this is the
         // standard Uniswap v2 / constant-product AMM convention for
         // initial share minting:  shares = sqrt(amount_a * amount_b).
-        let shares = pool_logic::calculate_shares(amount_a, amount_b, total_shares, reserve_a, reserve_b);
+        let shares =
+            pool_logic::calculate_shares(amount_a, amount_b, total_shares, reserve_a, reserve_b);
         pool_logic::update_balances_and_reserves(&env, amount_a, amount_b, shares, true);
 
         env.events()
@@ -173,7 +174,8 @@ impl ConstantProductPool {
 
         // Invariant: initialize() sets these keys before any deposit/swap/withdraw.
         let (reserve_a, reserve_b, total_shares) = pool_logic::get_reserves(&env);
-        let (amount_a, amount_b) = pool_logic::calculate_withdraw_amounts(reserve_a, reserve_b, shares, total_shares);
+        let (amount_a, amount_b) =
+            pool_logic::calculate_withdraw_amounts(reserve_a, reserve_b, shares, total_shares);
         pool_logic::check_slippage_withdraw(amount_a, min_a, amount_b, min_b)?;
         pool_logic::update_balances_and_reserves(&env, amount_a, amount_b, shares, false);
 
