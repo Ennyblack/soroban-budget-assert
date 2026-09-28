@@ -680,6 +680,7 @@ fn status_label(m: &MetricComparison) -> String {
     }
 }
 
+/// A `(function, metric)` row borrowed from a `CheckReport`.
 /// One metric row paired with the function it was measured under.
 ///
 /// Both rendering paths (text and Markdown) partition the same borrow-based
