@@ -1,32 +1,142 @@
+//! URL classification helpers for the hosts this project links to.
+//!
+//! Each predicate answers one narrow question — for example, "is this string
+//! an `https` URL whose authority is exactly `github.com` and whose text names
+//! the `Tollcraft` organisation?" — and is deliberately strict. The module
+//! exists so link validation never has to trust a substring or suffix match:
+//! a lookalike host such as `github.com.evil.example`, a subdomain such as
+//! `gist.github.com`, an explicit port, or a non-`https` scheme must all be
+//! rejected.
+//!
+//! All four predicates are built on `check_url_scheme_host`, a small
+//! hand-rolled parse rather than a pulled-in URL crate. It matches the scheme
+//! and authority literally and case-sensitively; see its documentation for the
+//! exact boundary rules. The functions are presently exercised only by the
+//! unit tests below, hence the module-wide `#![allow(dead_code)]`.
 #![allow(dead_code)]
 
+/// Checks that `url` starts with `expected_scheme` followed by `://`, and that
+/// the authority (everything up to the first `/`, or the end of the string)
+/// equals `expected_host` exactly.
+///
+/// The comparison is intentionally literal, which is what makes the public
+/// predicates safe against spoofed hosts:
+///
+/// * Surrounding whitespace on `url` is trimmed before parsing.
+/// * The scheme and host are matched case-sensitively, so `HTTPS://github.com`
+///   and `https://GitHub.com` do not match `https` / `github.com`.
+/// * The authority is read verbatim up to the first `/`. A subdomain
+///   (`gist.github.com`), a lookalike suffix (`github.com.evil.example`), a
+///   trailing dot (`github.com.`), an explicit port (`github.com:443`),
+///   userinfo (`user@github.com`), or a query/fragment with no preceding `/`
+///   (`github.com?x=1`) therefore all fail to match.
+/// * Only the first `/` terminates the authority; everything after it is path,
+///   query or fragment and is ignored by the host comparison.
+///
+/// Returns `false` for any input that does not carry a well-formed
+/// `scheme://host` prefix.
 fn check_url_scheme_host(url: &str, expected_scheme: &str, expected_host: &str) -> bool {
+    // Trim first so a URL pasted with stray leading/trailing whitespace still
+    // parses. Interior whitespace is left alone and fails the match below.
     let trimmed = url.trim();
+
+    // The scheme is a literal, case-sensitive prefix. `starts_with` alone is
+    // not sufficient: `httpsfoo://` also starts with `https`, which is exactly
+    // why the `://` guard below is required.
     if !trimmed.starts_with(expected_scheme) {
         return false;
     }
+
+    // Everything after the scheme must be the `://` authority marker. This
+    // rejects both `https:/github.com` and bare schemes such as `https`.
     let after_scheme = &trimmed[expected_scheme.len()..];
     if !after_scheme.starts_with("://") {
         return false;
     }
+
+    // The authority runs up to the first `/` (or the end of the string). There
+    // is no port/userinfo/query parsing: the whole span is compared verbatim,
+    // so any decoration fails the equality check.
     let after_protocol = &after_scheme[3..];
     let host_end = after_protocol.find('/').unwrap_or(after_protocol.len());
     let host = &after_protocol[..host_end];
+
     host == expected_host
 }
 
+/// Returns `true` when `url` is an `https://github.com` URL whose text contains
+/// the `/Tollcraft/` organisation segment.
+///
+/// The host must match exactly, so `gitlab.com`, `gist.github.com`,
+/// `github.com.evil.example` and non-`https` schemes are rejected. The
+/// organisation check, by contrast, is a plain substring search over the whole
+/// URL rather than a parsed path segment, so `/Tollcraft/` appearing in a query
+/// or fragment also counts — see `org_needle_is_matched_anywhere_in_the_url`
+/// for the pinned behaviour.
+///
+/// # Examples
+///
+/// ```text
+/// https://github.com/Tollcraft/soroban-budget-assert  -> true
+/// https://github.com/other-org/repo                   -> false
+/// http://github.com/Tollcraft/repo                    -> false
+/// ```
 pub fn is_github_repo_url(url: &str) -> bool {
+    // `check_url_scheme_host` trims internally, while the org needle is
+    // searched in the original string. Surrounding whitespace cannot change a
+    // substring match, so the two halves of the check stay consistent.
     check_url_scheme_host(url, "https", "github.com") && url.contains("/Tollcraft/")
 }
 
+/// Returns `true` when `url` is an `https` URL on exactly
+/// `developers.stellar.org`.
+///
+/// The parent domain (`stellar.org`), subdomains
+/// (`docs.developers.stellar.org`) and lookalike suffixes are all rejected, and
+/// a trailing-dot FQDN (`developers.stellar.org.`) does not match. Path, query
+/// and fragment are ignored once the authority matches.
+///
+/// # Examples
+///
+/// ```text
+/// https://developers.stellar.org/docs/reference/rpc  -> true
+/// https://stellar.org/docs                           -> false
+/// http://developers.stellar.org/docs                 -> false
+/// ```
 pub fn is_stellar_docs_url(url: &str) -> bool {
     check_url_scheme_host(url, "https", "developers.stellar.org")
 }
 
+/// Returns `true` when `url` is an `https://github.com` URL whose text contains
+/// the `/stellar/` organisation segment.
+///
+/// Mirrors `is_github_repo_url` with the Stellar organisation as the needle,
+/// including the substring (rather than path-segment) matching of that needle.
+///
+/// # Examples
+///
+/// ```text
+/// https://github.com/stellar/stellar-cli  -> true
+/// https://github.com/Tollcraft/repo       -> false
+/// https://gitlab.com/stellar/stellar-cli  -> false
+/// ```
 pub fn is_stellar_github_url(url: &str) -> bool {
     check_url_scheme_host(url, "https", "github.com") && url.contains("/stellar/")
 }
 
+/// Returns `true` when `url` is an `https` URL on exactly
+/// `tollcraft.gitbook.io`.
+///
+/// Other GitBook spaces (`other.gitbook.io`), the bare GitBook host
+/// (`gitbook.io`), subdomains and lookalike suffixes are rejected.
+///
+/// # Examples
+///
+/// ```text
+/// https://tollcraft.gitbook.io/docs/budget-assert  -> true
+/// https://other.gitbook.io/docs                    -> false
+/// https://tollcraft.gitbook.io.evil.example/docs   -> false
+/// ```
 pub fn is_tollcraft_docs_url(url: &str) -> bool {
     check_url_scheme_host(url, "https", "tollcraft.gitbook.io")
 }
