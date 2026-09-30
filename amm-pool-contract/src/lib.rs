@@ -84,7 +84,6 @@ impl RelayContract {
 /// from the main contract implementation to improve readability and testability.
 mod pool_logic;
 
-
 #[contract]
 pub struct ConstantProductPool;
 
