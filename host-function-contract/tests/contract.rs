@@ -32,7 +32,17 @@ use host_function_contract::{HostFunctionBenchmark, HostFunctionBenchmarkClient}
 use soroban_sdk::Env;
 
 /// Registers the fixture as native Rust and returns a client for it.
+///
+/// The budget is reset to unlimited so the assertions below observe return
+/// values only. `Env::default()` installs a *finite* default budget
+/// (`Budget::default()`: 100M CPU instructions and a 40 MB memory ceiling) plus
+/// the mainnet per-invocation resource limits, so a correctness test that drives
+/// an entry point hard enough can fail with a budget error rather than an
+/// assertion. Every `measure_*` harness in this crate already resets the budget
+/// for the same reason; these tests must not inherit a limit that has nothing
+/// to do with what they assert.
 fn native_client(env: &Env) -> HostFunctionBenchmarkClient<'_> {
+    env.cost_estimate().budget().reset_unlimited();
     let contract_id = env.register(HostFunctionBenchmark, ());
     HostFunctionBenchmarkClient::new(env, &contract_id)
 }
@@ -48,10 +58,16 @@ fn native_client(env: &Env) -> HostFunctionBenchmarkClient<'_> {
 /// exercise, `register_contract_wasm` with `#[allow(deprecated)]` remains
 /// necessary until soroban-sdk provides a non-deprecated replacement for raw
 /// WASM byte registration.
+///
+/// The budget is reset to unlimited for the same reason as in
+/// [`native_client`]: these assertions cover return values, not costs, and must
+/// not depend on the finite default budget or the mainnet per-invocation
+/// resource limits that `Env::default()` installs.
 fn wasm_client(env: &Env) -> HostFunctionBenchmarkClient<'_> {
     let wasm = common::load_contract_wasm("wasm32v1-none");
     #[allow(deprecated)]
     let contract_id = env.register_contract_wasm(None, wasm.as_slice());
+    env.cost_estimate().budget().reset_unlimited();
     HostFunctionBenchmarkClient::new(env, &contract_id)
 }
 
