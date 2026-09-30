@@ -78,12 +78,12 @@ impl RelayContract {
         }
     }
 }
+
 /// Internal module for AMM pool logic.
 ///
 /// Extracts the complex constant-product calculations and storage updates
 /// from the main contract implementation to improve readability and testability.
 mod pool_logic;
-
 
 #[contract]
 pub struct ConstantProductPool;
