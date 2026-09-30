@@ -11,7 +11,8 @@
 
 #[cfg(test)]
 mod tests {
-    use crate::cli::{BudgetReportArgs, CargoCli};
+    use crate::cli::args::BudgetReportArgs;
+    use crate::cli::CargoCli;
     use clap::error::ErrorKind;
     use clap::Parser;
 
@@ -263,35 +264,35 @@ mod tests {
 
     #[test]
     fn test_default_json_is_false() {
-        // According to cli.rs, json has default_value_t = false
+        // According to cli/args.rs, json has default_value_t = false
         let args = parse_args(&[]).unwrap();
         assert!(!args.json, "json should default to false");
     }
 
     #[test]
     fn test_default_check_is_false() {
-        // According to cli.rs, check has default_value_t = false
+        // According to cli/args.rs, check has default_value_t = false
         let args = parse_args(&[]).unwrap();
         assert!(!args.check, "check should default to false");
     }
 
     #[test]
     fn test_default_csv_is_false() {
-        // According to cli.rs, csv has default_value_t = false
+        // According to cli/args.rs, csv has default_value_t = false
         let args = parse_args(&[]).unwrap();
         assert!(!args.csv, "csv should default to false");
     }
 
     #[test]
     fn test_default_quiet_is_false() {
-        // According to cli.rs, quiet has default_value_t = false
+        // According to cli/args.rs, quiet has default_value_t = false
         let args = parse_args(&[]).unwrap();
         assert!(!args.quiet, "quiet should default to false");
     }
 
     #[test]
     fn test_default_validate_is_false() {
-        // According to cli.rs, validate has default_value_t = false
+        // According to cli/args.rs, validate has default_value_t = false
         let args = parse_args(&[]).unwrap();
         assert!(!args.validate, "validate should default to false");
     }
@@ -1046,7 +1047,8 @@ mod tests {
     // (missing value, wrong type, declared conflicts and requirements).
     // ========================================================================
 
-    use crate::cli::{ColorChoice, DEFAULT_CONCURRENCY};
+    use crate::cli::color::ColorChoice;
+    use crate::cli::DEFAULT_CONCURRENCY;
     use clap::CommandFactory;
 
     /// Looks up a clap argument definition by its field id.

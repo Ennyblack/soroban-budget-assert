@@ -15,10 +15,10 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
-#[path = "../cli.rs"]
+#[path = "../cli/mod.rs"]
 mod cli;
 
-use cli::BudgetReportArgs;
+use cli::args::BudgetReportArgs;
 
 /// Where the man page is written when no output path is given.
 const DEFAULT_OUTPUT: &str = "cargo-budget-report.1";
