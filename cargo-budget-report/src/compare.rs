@@ -544,19 +544,28 @@ pub fn check_against_baseline(
         });
     }
 
+    collect_new_entries(&mut report.new, baseline, current);
+
+    report
+}
+
+/// Collect functions present in `current` but absent from the baseline.
+fn collect_new_entries(
+    new: &mut Vec<NewEntry>,
+    baseline: &Baseline,
+    current: &BTreeMap<String, BTreeMap<String, Measurement>>,
+) {
     for (package, fns) in current {
         for function in fns.keys() {
             let key = function_key(package, function);
             if !baseline.entries.contains_key(&key) {
-                report.new.push(NewEntry {
+                new.push(NewEntry {
                     package: package.clone(),
                     function: function.clone(),
                 });
             }
         }
     }
-
-    report
 }
 
 /// Classify a single `(baseline, current, tolerance)` triple.
@@ -599,21 +608,8 @@ pub fn render_report_text(report: &CheckReport, opts: RenderOptions) -> String {
         out.push_str(&render_comparison_table(&report.compared, opts));
     }
 
-    if !report.new.is_empty() {
-        out.push_str("\nNew functions (no baseline entry):\n");
-        for entry in &report.new {
-            out.push_str(&format!("  + {}::{}\n", entry.package, entry.function));
-        }
-        out.push_str("  Suggestion: re-run with `--record-baseline` to capture them.\n");
-    }
-
-    if !report.stale.is_empty() {
-        out.push_str("\nStale baseline entries (function not in current WASM):\n");
-        for entry in &report.stale {
-            out.push_str(&format!("  - {}::{}\n", entry.package, entry.function));
-        }
-        out.push_str("  Suggestion: re-run with `--record-baseline` to clean them up.\n");
-    }
+    render_new_entries_text(&mut out, report);
+    render_stale_entries_text(&mut out, report);
 
     let counts = ChangeCounts::of(report);
     out.push_str("\nSummary:\n");
@@ -682,6 +678,81 @@ fn status_label(m: &MetricComparison) -> String {
         Verdict::Pass if m.is_unchanged() => "unchanged".to_string(),
         Verdict::Pass => "within tolerance".to_string(),
     }
+}
+
+/// A `(function, metric)` row borrowed from a `CheckReport`.
+/// One metric row paired with the function it was measured under.
+///
+/// Both rendering paths (text and Markdown) partition the same borrow-based
+/// rows, so naming the pair keeps [`partition_rows`]'s signature readable.
+type MetricRow<'a> = (&'a FunctionComparison, &'a MetricComparison);
+
+/// Partition metric rows into (changed, unchanged) for rendering.
+fn partition_rows(report: &CheckReport) -> (Vec<MetricRow<'_>>, Vec<MetricRow<'_>>) {
+    let mut changed = Vec::new();
+    let mut unchanged = Vec::new();
+    for row in &report.compared {
+        for m in &row.metrics {
+            if m.is_unchanged() {
+                unchanged.push((row, m));
+            } else {
+                changed.push((row, m));
+            }
+        }
+    }
+    (changed, unchanged)
+}
+
+fn render_new_entries_text(out: &mut String, report: &CheckReport) {
+    if report.new.is_empty() {
+        return;
+    }
+    out.push_str("\nNew functions (no baseline entry):\n");
+    for entry in &report.new {
+        out.push_str(&format!("  + {}::{}\n", entry.package, entry.function));
+    }
+    out.push_str("  Suggestion: re-run with `--record-baseline` to capture them.\n");
+}
+
+fn render_stale_entries_text(out: &mut String, report: &CheckReport) {
+    if report.stale.is_empty() {
+        return;
+    }
+    out.push_str("\nStale baseline entries (function not in current WASM):\n");
+    for entry in &report.stale {
+        out.push_str(&format!("  - {}::{}\n", entry.package, entry.function));
+    }
+    out.push_str("  Suggestion: re-run with `--record-baseline` to clean them up.\n");
+}
+
+fn render_new_entries_markdown(out: &mut String, report: &CheckReport) {
+    if report.new.is_empty() {
+        return;
+    }
+    let names: Vec<String> = report
+        .new
+        .iter()
+        .map(|e| format!("`{}::{}`", e.package, e.function))
+        .collect();
+    out.push_str(&format!(
+        "\n**New functions** (no baseline entry — re-run `--record-baseline` to capture): {}\n",
+        names.join(", ")
+    ));
+}
+
+fn render_stale_entries_markdown(out: &mut String, report: &CheckReport) {
+    if report.stale.is_empty() {
+        return;
+    }
+    let names: Vec<String> = report
+        .stale
+        .iter()
+        .map(|e| format!("`{}::{}`", e.package, e.function))
+        .collect();
+    out.push_str(&format!(
+        "\n**Stale entries** (in baseline, not in current WASM — re-run `--record-baseline` to clean up): {}\n",
+        names.join(", ")
+    ));
 }
 
 fn render_comparison_table(rows: &[FunctionComparison], opts: RenderOptions) -> String {
@@ -755,17 +826,7 @@ pub fn render_report_markdown(report: &CheckReport, opts: RenderOptions) -> Stri
     }
     out.push_str("\n\n");
 
-    let mut changed: Vec<(&FunctionComparison, &MetricComparison)> = Vec::new();
-    let mut unchanged: Vec<(&FunctionComparison, &MetricComparison)> = Vec::new();
-    for row in &report.compared {
-        for m in &row.metrics {
-            if m.is_unchanged() {
-                unchanged.push((row, m));
-            } else {
-                changed.push((row, m));
-            }
-        }
-    }
+    let (changed, unchanged) = partition_rows(report);
 
     if changed.is_empty() {
         out.push_str("_No metric changed._\n");
@@ -782,28 +843,8 @@ pub fn render_report_markdown(report: &CheckReport, opts: RenderOptions) -> Stri
         out.push_str("\n</details>\n");
     }
 
-    if !report.new.is_empty() {
-        let names: Vec<String> = report
-            .new
-            .iter()
-            .map(|e| format!("`{}::{}`", e.package, e.function))
-            .collect();
-        out.push_str(&format!(
-            "\n**New functions** (no baseline entry — re-run `--record-baseline` to capture): {}\n",
-            names.join(", ")
-        ));
-    }
-    if !report.stale.is_empty() {
-        let names: Vec<String> = report
-            .stale
-            .iter()
-            .map(|e| format!("`{}::{}`", e.package, e.function))
-            .collect();
-        out.push_str(&format!(
-            "\n**Stale entries** (in baseline, not in current WASM — re-run `--record-baseline` to clean up): {}\n",
-            names.join(", ")
-        ));
-    }
+    render_new_entries_markdown(&mut out, report);
+    render_stale_entries_markdown(&mut out, report);
 
     out
 }
